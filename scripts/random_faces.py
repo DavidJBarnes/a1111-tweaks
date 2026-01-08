@@ -176,20 +176,12 @@ class RandomFacesScript(scripts.Script):
         # Store for later retrieval
         self.last_selected_face = selected_face
 
-        # DEBUG: Print all script args to see structure
-        print(f"[Random Faces DEBUG] Total script_args: {len(p.script_args) if hasattr(p, 'script_args') else 0}")
-        if hasattr(p, 'script_args'):
-            for i, arg in enumerate(p.script_args):
-                print(f"[Random Faces DEBUG] script_args[{i}]: {type(arg).__name__} = {str(arg)[:100]}")
-
-        # Try to find alwayson_scripts
-        if hasattr(p, 'alwayson_scripts'):
-            print(f"[Random Faces DEBUG] alwayson_scripts found: {list(p.alwayson_scripts.keys())}")
-            for script_name, script_args in p.alwayson_scripts.items():
-                if 'faceswap' in script_name.lower():
-                    print(f"[Random Faces DEBUG] FaceSwapLab args: {script_args}")
-
-        print(f"[Random Faces] Selected face: {selected_face}")
+        # FaceSwapLab stores the face checkpoint at index 28
+        if hasattr(p, 'script_args') and len(p.script_args) > 28:
+            p.script_args[28] = selected_face
+            print(f"[Random Faces] Set face checkpoint to: {selected_face}")
+        else:
+            print(f"[Random Faces] Warning: Could not set face checkpoint")
 
     def process(self, p, enabled):
         # Moved logic to before_process
