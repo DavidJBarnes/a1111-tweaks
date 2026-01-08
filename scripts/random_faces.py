@@ -177,8 +177,11 @@ class RandomFacesScript(scripts.Script):
         self.last_selected_face = selected_face
 
         # FaceSwapLab stores the face checkpoint at index 28
+        # script_args is a tuple, so we need to convert to list, modify, and convert back
         if hasattr(p, 'script_args') and len(p.script_args) > 28:
-            p.script_args[28] = selected_face
+            args_list = list(p.script_args)
+            args_list[28] = selected_face
+            p.script_args = tuple(args_list)
             print(f"[Random Faces] Set face checkpoint to: {selected_face}")
         else:
             print(f"[Random Faces] Warning: Could not set face checkpoint")
