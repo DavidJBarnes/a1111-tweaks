@@ -176,32 +176,20 @@ class RandomFacesScript(scripts.Script):
         # Store for later retrieval
         self.last_selected_face = selected_face
 
-        # FaceSwapLab uses alwayson_scripts
-        # We need to find the FaceSwapLab script and modify its args
-        if hasattr(p, 'script_args') and p.script_args:
-            try:
-                # FaceSwapLab args are typically in a specific position
-                # The face checkpoint is usually one of the early arguments
-                # This tries to find and set it
-                for i, arg in enumerate(p.script_args):
-                    # Look for the face checkpoint field
-                    if isinstance(arg, str) and arg.endswith('.safetensors'):
-                        p.script_args[i] = selected_face
-                        print(f"[Random Faces] Set face checkpoint to: {selected_face}")
-                        return
+        # DEBUG: Print all script args to see structure
+        print(f"[Random Faces DEBUG] Total script_args: {len(p.script_args) if hasattr(p, 'script_args') else 0}")
+        if hasattr(p, 'script_args'):
+            for i, arg in enumerate(p.script_args):
+                print(f"[Random Faces DEBUG] script_args[{i}]: {type(arg).__name__} = {str(arg)[:100]}")
 
-                # If not found by extension, try setting at known positions
-                # FaceSwapLab Face 1 checkpoint is typically around index 2-4
-                for idx in [2, 3, 4]:
-                    if idx < len(p.script_args):
-                        p.script_args[idx] = selected_face
-                        print(f"[Random Faces] Set face checkpoint at index {idx} to: {selected_face}")
-                        return
+        # Try to find alwayson_scripts
+        if hasattr(p, 'alwayson_scripts'):
+            print(f"[Random Faces DEBUG] alwayson_scripts found: {list(p.alwayson_scripts.keys())}")
+            for script_name, script_args in p.alwayson_scripts.items():
+                if 'faceswap' in script_name.lower():
+                    print(f"[Random Faces DEBUG] FaceSwapLab args: {script_args}")
 
-            except Exception as e:
-                print(f"[Random Faces] Error setting face: {e}")
-
-        print(f"[Random Faces] Warning: Could not set face checkpoint")
+        print(f"[Random Faces] Selected face: {selected_face}")
 
     def process(self, p, enabled):
         # Moved logic to before_process
