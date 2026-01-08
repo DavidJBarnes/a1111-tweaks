@@ -9,6 +9,7 @@ class RandomFacesScript(scripts.Script):
     def __init__(self):
         self.presets_file = os.path.join(scripts.basedir(), "random_faces_presets.json")
         self.face_pool = self.load_presets()
+        self.last_selected_face = None
 
         # You'll need to update this list with your actual .safetensors files
         # These are examples based on your screenshot
@@ -154,7 +155,7 @@ class RandomFacesScript(scripts.Script):
 
         return [enabled]
 
-    def process(self, p, enabled):
+    def before_process(self, p, enabled):
         if not enabled:
             return
 
@@ -172,28 +173,40 @@ class RandomFacesScript(scripts.Script):
         # Select a random face from the pool
         selected_face = random.choice(valid_faces)
 
-        # FaceSwapLab stores face selection in different ways depending on version
-        # Try multiple approaches to set the face
+        # Store for later retrieval
+        self.last_selected_face = selected_face
 
-        # Approach 1: Direct attribute (common in some versions)
-        if hasattr(p, 'faceswaplab_face'):
-            p.faceswaplab_face = selected_face
+        # FaceSwapLab uses alwayson_scripts
+        # We need to find the FaceSwapLab script and modify its args
+        if hasattr(p, 'script_args') and p.script_args:
+            try:
+                # FaceSwapLab args are typically in a specific position
+                # The face checkpoint is usually one of the early arguments
+                # This tries to find and set it
+                for i, arg in enumerate(p.script_args):
+                    # Look for the face checkpoint field
+                    if isinstance(arg, str) and arg.endswith('.safetensors'):
+                        p.script_args[i] = selected_face
+                        print(f"[Random Faces] Set face checkpoint to: {selected_face}")
+                        return
 
-        # Approach 2: Via alwayson_scripts (more common)
-        if hasattr(p, 'script_args'):
-            # Find FaceSwapLab in script_args and update it
-            # This part may need adjustment based on FaceSwapLab's exact structure
-            for i, arg in enumerate(p.script_args):
-                if isinstance(arg, dict) and 'face' in str(arg).lower():
-                    p.script_args[i] = selected_face
+                # If not found by extension, try setting at known positions
+                # FaceSwapLab Face 1 checkpoint is typically around index 2-4
+                for idx in [2, 3, 4]:
+                    if idx < len(p.script_args):
+                        p.script_args[idx] = selected_face
+                        print(f"[Random Faces] Set face checkpoint at index {idx} to: {selected_face}")
+                        return
 
-        print(f"[Random Faces] Selected face: {selected_face}")
+            except Exception as e:
+                print(f"[Random Faces] Error setting face: {e}")
+
+        print(f"[Random Faces] Warning: Could not set face checkpoint")
+
+    def process(self, p, enabled):
+        # Moved logic to before_process
+        pass
 
     def postprocess(self, p, processed, enabled):
-        if enabled:
-            # Try to get the face that was used
-            selected_face = "Unknown"
-            if hasattr(p, 'faceswaplab_face'):
-                selected_face = p.faceswaplab_face
-
-            processed.info += f"\nRandom Face: {selected_face}"
+        if enabled and self.last_selected_face:
+            processed.info += f"\nRandom Face: {self.last_selected_face}"
