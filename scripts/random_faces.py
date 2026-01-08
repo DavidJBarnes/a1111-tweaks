@@ -66,11 +66,6 @@ class RandomFacesScript(scripts.Script):
             with gr.Accordion("a1111 tweaks - Random Faces", open=False):
                 enabled = gr.Checkbox(label="Enable Random Face Selection", value=False)
 
-                seed_based = gr.Checkbox(
-                    label="Use seed for randomization (reproducible)",
-                    value=False
-                )
-
                 gr.Markdown("### Current Face Pool")
                 pool_display = gr.Textbox(
                     label="Faces that will be randomly selected",
@@ -157,9 +152,9 @@ class RandomFacesScript(scripts.Script):
                     outputs=[face_dropdown]
                 )
 
-        return [enabled, seed_based]
+        return [enabled]
 
-    def process(self, p, enabled, seed_based):
+    def process(self, p, enabled):
         if not enabled:
             return
 
@@ -173,10 +168,6 @@ class RandomFacesScript(scripts.Script):
         if not valid_faces:
             print("[Random Faces] Only 'None' in pool, skipping")
             return
-
-        # Use seed for reproducibility if requested
-        if seed_based:
-            random.seed(p.seed)
 
         # Select a random face from the pool
         selected_face = random.choice(valid_faces)
@@ -198,7 +189,7 @@ class RandomFacesScript(scripts.Script):
 
         print(f"[Random Faces] Selected face: {selected_face}")
 
-    def postprocess(self, p, processed, enabled, seed_based):
+    def postprocess(self, p, processed, enabled):
         if enabled:
             # Try to get the face that was used
             selected_face = "Unknown"

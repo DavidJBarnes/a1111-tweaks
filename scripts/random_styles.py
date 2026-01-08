@@ -63,11 +63,6 @@ class RandomStylesScript(scripts.Script):
             with gr.Accordion("a1111 tweaks - Random Styles", open=False):
                 enabled = gr.Checkbox(label="Enable Random Style Selection", value=False)
 
-                seed_based = gr.Checkbox(
-                    label="Use seed for randomization (reproducible)",
-                    value=False
-                )
-
                 gr.Markdown("### Current Style Pool")
                 pool_display = gr.Textbox(
                     label="Styles that will be randomly selected",
@@ -135,19 +130,15 @@ class RandomStylesScript(scripts.Script):
                     outputs=[pool_display]
                 )
 
-        return [enabled, seed_based]
+        return [enabled]
 
-    def process(self, p, enabled, seed_based):
+    def process(self, p, enabled):
         if not enabled:
             return
 
         if not self.style_pool:
             print("[Random Styles] No styles in pool!")
             return
-
-        # Use seed for reproducibility if requested
-        if seed_based:
-            random.seed(p.seed)
 
         # Select a random style from the pool
         selected_style = random.choice(self.style_pool)
@@ -163,7 +154,7 @@ class RandomStylesScript(scripts.Script):
 
         print(f"[Random Styles] Selected style: {selected_style}")
 
-    def postprocess(self, p, processed, enabled, seed_based):
+    def postprocess(self, p, processed, enabled):
         if enabled and hasattr(p, 'styles'):
             style_info = p.styles if isinstance(p.styles, str) else ", ".join(p.styles)
             processed.info += f"\nRandom Style: {style_info}"

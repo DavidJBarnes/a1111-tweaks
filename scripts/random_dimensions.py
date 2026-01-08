@@ -5,6 +5,7 @@ import os
 from modules import scripts
 from modules.processing import process_images
 
+
 class RandomDimensionsScript(scripts.Script):
     def __init__(self):
         self.presets_file = os.path.join(scripts.basedir(), "random_dimensions_presets.json")
@@ -48,13 +49,8 @@ class RandomDimensionsScript(scripts.Script):
 
     def ui(self, is_img2img):
         with gr.Group():
-            with gr.Accordion("Random Dimensions", open=False):
+            with gr.Accordion("a1111 tweaks - Random Dimensions", open=False):
                 enabled = gr.Checkbox(label="Enable Random Dimensions", value=False)
-
-                seed_based = gr.Checkbox(
-                    label="Use seed for randomization (reproducible)",
-                    value=False
-                )
 
                 gr.Markdown("### Saved Dimension Pairs")
                 preset_display = gr.Textbox(
@@ -117,19 +113,15 @@ class RandomDimensionsScript(scripts.Script):
                     outputs=[preset_display]
                 )
 
-        return [enabled, seed_based]
+        return [enabled]
 
-    def process(self, p, enabled, seed_based):
+    def process(self, p, enabled):
         if not enabled:
             return
 
         if not self.dimension_pairs:
             print("[Random Dimensions] No dimension pairs available!")
             return
-
-        # Use seed for reproducibility if requested
-        if seed_based:
-            random.seed(p.seed)
 
         # Select a random dimension pair
         selected_pair = random.choice(self.dimension_pairs)
@@ -138,6 +130,6 @@ class RandomDimensionsScript(scripts.Script):
 
         print(f"[Random Dimensions] Set dimensions to: {p.width}x{p.height}")
 
-    def postprocess(self, p, processed, enabled, seed_based):
+    def postprocess(self, p, processed, enabled):
         if enabled:
             processed.info += f"\nRandom Dimensions: {p.width}x{p.height}"
