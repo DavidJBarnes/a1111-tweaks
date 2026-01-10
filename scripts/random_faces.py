@@ -5,8 +5,6 @@ import os
 import glob
 import time
 from modules import scripts, script_callbacks
-
-
 class RandomFacesScript(scripts.Script):
     def __init__(self):
         self.presets_file = os.path.join(scripts.basedir(), "random_faces_presets.json")
@@ -30,13 +28,10 @@ class RandomFacesScript(scripts.Script):
             "katymoore.safetensors",
             "pam_beesly.safetensors"
         ]
-
     def title(self):
         return "Random FaceSwapLab Faces"
-
     def show(self, is_img2img):
         return scripts.AlwaysVisible
-
     def load_presets(self):
         """Load saved face pool from file"""
         if os.path.exists(self.presets_file):
@@ -46,7 +41,6 @@ class RandomFacesScript(scripts.Script):
             except:
                 pass
         return []
-
     def save_presets(self):
         """Save face pool to file"""
         try:
@@ -54,13 +48,11 @@ class RandomFacesScript(scripts.Script):
                 json.dump(self.face_pool, f, indent=2)
         except Exception as e:
             print(f"[Random Faces] Error saving presets: {e}")
-
     def get_face_pool_text(self):
         """Format face pool for display"""
         if not self.face_pool:
             return "No faces in pool"
         return "\n".join([f"{i + 1}. {face}" for i, face in enumerate(self.face_pool)])
-
     def ui(self, is_img2img):
         with gr.Group():
             with gr.Accordion("a1111 tweaks - Random Faces", open=False):
@@ -81,25 +73,20 @@ class RandomFacesScript(scripts.Script):
                 with gr.Row():
                     clear_btn = gr.Button("Clear Pool")
                     save_btn = gr.Button("Save Pool")
-
                 def add_face(face):
                     if face and face != "None" and face not in self.face_pool:
                         self.face_pool.append(face)
                     return self.get_face_pool_text()
-
                 def clear_pool():
                     self.face_pool = []
                     return self.get_face_pool_text()
-
                 def save_pool():
                     self.save_presets()
                     return self.get_face_pool_text()
-
                 add_btn.click(fn=add_face, inputs=[face_dropdown], outputs=[pool_display])
                 clear_btn.click(fn=clear_pool, outputs=[pool_display])
                 save_btn.click(fn=save_pool, outputs=[pool_display])
         return [enabled]
-
     def before_process(self, p, enabled):
         global _last_selected_face
         if not enabled:
@@ -127,17 +114,14 @@ class RandomFacesScript(scripts.Script):
             print(f"[Random Faces] Set face checkpoint to: {selected_face}")
         else:
             print(f"[Random Faces] Warning: Could not set face checkpoint (script_args too short)")
-
     def process(self, p, enabled):
         # Moved logic to before_process
         pass
-
     def get_face_name(self, face_filename):
         """Extract name from face filename (remove .safetensors extension and lowercase)"""
         if not face_filename or face_filename == "None":
             return None
         return face_filename.replace('.safetensors', '').lower()
-
     def postprocess(self, p, processed, enabled):
         """Add selected face info to generation parameters"""
         if enabled and self.last_selected_face:
@@ -145,36 +129,33 @@ class RandomFacesScript(scripts.Script):
                 for i in range(len(processed.infotexts)):
                     processed.infotexts[i] += f", Random Face: {self.last_selected_face}"
 
-
 # Global to track last selected face for the callback
 _last_selected_face = None
-
 
 def on_image_saved(params):
     """Called after each image is saved - rename -swapped files"""
     global _last_selected_face
-
+    
     filepath = params.filename
     print(f"[Random Faces] on_image_saved called: {filepath}")
-
+    
     if not _last_selected_face:
         print("[Random Faces] No last_selected_face, skipping")
         return
-
+    
     if not filepath.endswith('-swapped.png'):
         print(f"[Random Faces] Not a swapped file, skipping")
         return
-
+    
     # Remove .safetensors extension and lowercase
     face_name = _last_selected_face.replace('.safetensors', '').lower()
-
+    
     new_filepath = filepath.replace('-swapped.png', f'-{face_name}.png')
     try:
         os.rename(filepath, new_filepath)
         print(f"[Random Faces] Renamed: {os.path.basename(filepath)} -> {os.path.basename(new_filepath)}")
     except Exception as e:
         print(f"[Random Faces] Error renaming file: {e}")
-
 
 # Register the callback
 script_callbacks.on_image_saved(on_image_saved)
