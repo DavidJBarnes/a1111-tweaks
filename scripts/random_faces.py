@@ -155,14 +155,11 @@ def on_image_saved(params):
     global _last_selected_face
 
     filepath = params.filename
-    print(f"[Random Faces] on_image_saved called: {filepath}")
 
     if not _last_selected_face:
-        print("[Random Faces] No last_selected_face, skipping")
         return
 
     if not filepath.endswith('-swapped.png'):
-        print(f"[Random Faces] Not a swapped file, skipping")
         return
 
     # Remove .safetensors extension and lowercase
