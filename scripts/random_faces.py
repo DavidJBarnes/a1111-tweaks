@@ -12,7 +12,6 @@ class RandomFacesScript(scripts.Script):
         self.last_selected_face = None
 
         # You'll need to update this list with your actual .safetensors files
-        # These are examples based on your screenshot
         self.available_faces = [
             "None",
             "Andrea_all.safetensors",
@@ -45,7 +44,6 @@ class RandomFacesScript(scripts.Script):
                     return json.load(f)
             except:
                 pass
-        # Default face pool (empty to avoid accidental face swaps)
         return []
 
     def save_presets(self):
@@ -67,91 +65,41 @@ class RandomFacesScript(scripts.Script):
             with gr.Accordion("a1111 tweaks - Random Faces", open=False):
                 enabled = gr.Checkbox(label="Enable Random Face Selection", value=False)
 
-                gr.Markdown("### Current Face Pool")
-                pool_display = gr.Textbox(
-                    label="Faces that will be randomly selected",
-                    value=self.get_face_pool_text(),
-                    interactive=False,
-                    lines=8
-                )
-
-                gr.Markdown("### Add Face to Pool")
                 with gr.Row():
                     face_dropdown = gr.Dropdown(
                         choices=self.available_faces,
-                        label="Select Face",
-                        value=self.available_faces[0] if self.available_faces else None
+                        label="Add face to pool",
+                        value="None"
                     )
-                    add_btn = gr.Button("Add to Pool", variant="primary")
+                    add_btn = gr.Button("Add to Pool", scale=0)
 
-                gr.Markdown("### Manage Pool")
-                with gr.Row():
-                    remove_index = gr.Number(
-                        label="Face Number to Remove",
-                        value=1,
-                        precision=0,
-                        minimum=1
-                    )
-                    remove_btn = gr.Button("Remove Face", variant="secondary")
+                pool_display = gr.Textbox(
+                    label="Current Face Pool",
+                    value=self.get_face_pool_text(),
+                    interactive=False,
+                    lines=5
+                )
 
                 with gr.Row():
-                    clear_btn = gr.Button("Clear All Faces", variant="stop")
-                    refresh_btn = gr.Button("Refresh Available Faces", variant="secondary")
+                    clear_btn = gr.Button("Clear Pool")
+                    save_btn = gr.Button("Save Pool")
 
                 def add_face(face):
-                    if face and face not in self.face_pool:
+                    if face and face != "None" and face not in self.face_pool:
                         self.face_pool.append(face)
-                        self.save_presets()
-                    elif face in self.face_pool:
-                        return f"⚠️ '{face}' is already in the pool\n\n{self.get_face_pool_text()}"
                     return self.get_face_pool_text()
 
-                def remove_face(index):
-                    index = int(index) - 1
-                    if 0 <= index < len(self.face_pool):
-                        self.face_pool.pop(index)
-                        self.save_presets()
-                    return self.get_face_pool_text()
-
-                def clear_all():
+                def clear_pool():
                     self.face_pool = []
+                    return self.get_face_pool_text()
+
+                def save_pool():
                     self.save_presets()
                     return self.get_face_pool_text()
 
-                def refresh_faces():
-                    # Try to dynamically load faces from FaceSwapLab
-                    # This is a placeholder - actual implementation depends on FaceSwapLab's structure
-                    try:
-                        # You may need to import FaceSwapLab modules here
-                        # and get the actual list of available faces
-                        pass
-                    except:
-                        pass
-                    return face_dropdown.update(choices=self.available_faces)
-
-                add_btn.click(
-                    fn=add_face,
-                    inputs=[face_dropdown],
-                    outputs=[pool_display]
-                )
-
-                remove_btn.click(
-                    fn=remove_face,
-                    inputs=[remove_index],
-                    outputs=[pool_display]
-                )
-
-                clear_btn.click(
-                    fn=clear_all,
-                    inputs=[],
-                    outputs=[pool_display]
-                )
-
-                refresh_btn.click(
-                    fn=refresh_faces,
-                    inputs=[],
-                    outputs=[face_dropdown]
-                )
+                add_btn.click(fn=add_face, inputs=[face_dropdown], outputs=[pool_display])
+                clear_btn.click(fn=clear_pool, outputs=[pool_display])
+                save_btn.click(fn=save_pool, outputs=[pool_display])
 
         return [enabled]
 
@@ -176,13 +124,24 @@ class RandomFacesScript(scripts.Script):
         # Store for later retrieval
         self.last_selected_face = selected_face
 
-        # FaceSwapLab stores the face checkpoint at index 28
-        # script_args is a tuple, so we need to convert to list, modify, and convert back
+        # DEBUG: Print all script args that contain .safetensors to find FaceSwapLab's index
+        print(f"[Random Faces DEBUG] ========== LOOKING FOR FACESWAPLAB INDEX ==========")
+        print(f"[Random Faces DEBUG] Total script_args: {len(p.script_args) if hasattr(p, 'script_args') else 0}")
+        if hasattr(p, 'script_args'):
+            for i, arg in enumerate(p.script_args):
+                # Only print args that look like face checkpoints
+                if isinstance(arg, str) and '.safetensors' in arg:
+                    print(f"[Random Faces DEBUG] script_args[{i}]: {arg}")
+        print(f"[Random Faces DEBUG] ===================================================")
+        print(f"[Random Faces] Want to set face to: {selected_face}")
+
+        # Try to set the face checkpoint at index 28 (old position)
+        # After ControlNet, this index has likely changed
         if hasattr(p, 'script_args') and len(p.script_args) > 28:
             args_list = list(p.script_args)
             args_list[28] = selected_face
             p.script_args = tuple(args_list)
-            print(f"[Random Faces] Set face checkpoint to: {selected_face}")
+            print(f"[Random Faces] Set script_args[28] to: {selected_face}")
         else:
             print(f"[Random Faces] Warning: Could not set face checkpoint")
 
@@ -191,5 +150,8 @@ class RandomFacesScript(scripts.Script):
         pass
 
     def postprocess(self, p, processed, enabled):
+        """Add selected face info to generation parameters"""
         if enabled and self.last_selected_face:
-            processed.info += f"\nRandom Face: {self.last_selected_face}"
+            if hasattr(processed, 'infotexts') and processed.infotexts:
+                for i in range(len(processed.infotexts)):
+                    processed.infotexts[i] += f", Random Face: {self.last_selected_face}"
