@@ -1,108 +1,107 @@
-import gradio as gr
 import random
+import gradio as gr
 import json
 import os
-import glob
-import re
-
-from modules import scripts, script_callbacks
-from modules.shared import opts
+from modules import scripts
 
 
 class RandomFacesScript(scripts.Script):
     def __init__(self):
-        super().__init__()
-        self.face_pool = []
+        self.presets_file = os.path.join(scripts.basedir(), "random_faces_presets.json")
+        self.face_pool = self.load_presets()
         self.last_selected_face = None
-        self.config_file = os.path.join(scripts.basedir(), "random_faces_config.json")
-        self.load_config()
+
+        # You'll need to update this list with your actual .safetensors files
+        self.available_faces = [
+            "None",
+            "Andrea_all.safetensors",
+            "Chelsea_all.safetensors",
+            "JennyWade_all.safetensors",
+            "Kelly_20251124.safetensors",
+            "Kelly__all.safetensors",
+            "Kelly__all_but_young.safetensors",
+            "Kelly_young.safetensors",
+            "Kerry_all.safetensors",
+            "Me.safetensors",
+            "Udycz_all.safetensors",
+            "gena.safetensors",
+            "jan.safetensors",
+            "katymoore.safetensors",
+            "pam_beesly.safetensors"
+        ]
 
     def title(self):
-        return "Random Faces"
+        return "Random FaceSwapLab Faces"
 
     def show(self, is_img2img):
         return scripts.AlwaysVisible
 
-    def load_config(self):
-        """Load face pool from config file"""
-        if os.path.exists(self.config_file):
+    def load_presets(self):
+        """Load saved face pool from file"""
+        if os.path.exists(self.presets_file):
             try:
-                with open(self.config_file, 'r') as f:
-                    data = json.load(f)
-                    self.face_pool = data.get('face_pool', [])
-            except Exception as e:
-                print(f"[Random Faces] Error loading config: {e}")
-                self.face_pool = []
+                with open(self.presets_file, 'r') as f:
+                    return json.load(f)
+            except:
+                pass
+        return []
 
-    def save_config(self):
-        """Save face pool to config file"""
+    def save_presets(self):
+        """Save face pool to file"""
         try:
-            with open(self.config_file, 'w') as f:
-                json.dump({'face_pool': self.face_pool}, f, indent=2)
+            with open(self.presets_file, 'w') as f:
+                json.dump(self.face_pool, f, indent=2)
         except Exception as e:
-            print(f"[Random Faces] Error saving config: {e}")
+            print(f"[Random Faces] Error saving presets: {e}")
 
-    def get_available_faces(self):
-        """Get list of available face checkpoints from FaceSwapLab directory"""
-        faces_dir = os.path.join(os.path.dirname(scripts.basedir()), "sd-webui-faceswaplab", "faces")
-        if not os.path.exists(faces_dir):
-            # Try alternate location
-            faces_dir = os.path.join(opts.data_path, "models", "faceswaplab", "faces")
-
-        faces = ["None"]  # Option to not swap
-        if os.path.exists(faces_dir):
-            for f in os.listdir(faces_dir):
-                if f.endswith('.safetensors'):
-                    faces.append(f)
-        return sorted(faces)
+    def get_face_pool_text(self):
+        """Format face pool for display"""
+        if not self.face_pool:
+            return "No faces in pool"
+        return "\n".join([f"{i + 1}. {face}" for i, face in enumerate(self.face_pool)])
 
     def ui(self, is_img2img):
-        with gr.Accordion("Random Faces", open=False):
-            enabled = gr.Checkbox(label="Enable Random Faces", value=False)
+        with gr.Group():
+            with gr.Accordion("a1111 tweaks - Random Faces", open=False):
+                enabled = gr.Checkbox(label="Enable Random Face Selection", value=False)
 
-            available_faces = self.get_available_faces()
+                with gr.Row():
+                    face_dropdown = gr.Dropdown(
+                        choices=self.available_faces,
+                        label="Add face to pool",
+                        value="None"
+                    )
+                    add_btn = gr.Button("Add to Pool", scale=0)
 
-            face_pool = gr.CheckboxGroup(
-                choices=available_faces,
-                value=self.face_pool,
-                label="Face Pool (randomly select from checked faces)"
-            )
+                pool_display = gr.Textbox(
+                    label="Current Face Pool",
+                    value=self.get_face_pool_text(),
+                    interactive=False,
+                    lines=5
+                )
 
-            current_pool = gr.Textbox(
-                label="Current Pool",
-                value=", ".join(self.face_pool) if self.face_pool else "None selected",
-                interactive=False
-            )
+                with gr.Row():
+                    clear_btn = gr.Button("Clear Pool")
+                    save_btn = gr.Button("Save Pool")
 
-            def update_pool(selected):
-                self.face_pool = selected
-                self.save_config()
-                return ", ".join(selected) if selected else "None selected"
+                def add_face(face):
+                    if face and face != "None" and face not in self.face_pool:
+                        self.face_pool.append(face)
+                    return self.get_face_pool_text()
 
-            face_pool.change(
-                fn=update_pool,
-                inputs=[face_pool],
-                outputs=[current_pool]
-            )
+                def clear_pool():
+                    self.face_pool = []
+                    return self.get_face_pool_text()
+
+                def save_pool():
+                    self.save_presets()
+                    return self.get_face_pool_text()
+
+                add_btn.click(fn=add_face, inputs=[face_dropdown], outputs=[pool_display])
+                clear_btn.click(fn=clear_pool, outputs=[pool_display])
+                save_btn.click(fn=save_pool, outputs=[pool_display])
 
         return [enabled]
-
-    def get_face_short_name(self, face_filename):
-        """Extract name from face filename for use in renamed files.
-
-        Examples:
-            Kelly_young.safetensors -> kelly_young
-            Kelly_20251124.safetensors -> kelly_20251124
-            Andrea_v2.safetensors -> andrea_v2
-            Chelsea_all.safetensors -> chelsea_all
-        """
-        if not face_filename or face_filename == "None":
-            return None
-
-        # Remove .safetensors extension and lowercase
-        name = face_filename.replace('.safetensors', '').lower()
-
-        return name
 
     def before_process(self, p, enabled):
         if not enabled:
@@ -142,52 +141,8 @@ class RandomFacesScript(scripts.Script):
         pass
 
     def postprocess(self, p, processed, enabled):
-        """Add selected face info to generation parameters and rename swapped files"""
-        if not enabled or not self.last_selected_face:
-            return
-
-        # Add face info to metadata
-        if hasattr(processed, 'infotexts') and processed.infotexts:
-            for i in range(len(processed.infotexts)):
-                processed.infotexts[i] += f", Random Face: {self.last_selected_face}"
-
-        # Rename swapped files
-        self.rename_swapped_files(p, processed)
-
-    def rename_swapped_files(self, p, processed):
-        """Find and rename -swapped files to include face name"""
-        if not self.last_selected_face:
-            return
-
-        short_name = self.get_face_short_name(self.last_selected_face)
-        if not short_name:
-            return
-
-        # Get the output directory
-        outdir = p.outpath_samples if hasattr(p, 'outpath_samples') else None
-        if not outdir:
-            print("[Random Faces] Could not determine output directory")
-            return
-
-        # Look for recently created -swapped files (within last 30 seconds)
-        import time
-        current_time = time.time()
-
-        # Pattern: *-swapped.png
-        swapped_pattern = os.path.join(outdir, "*-swapped.png")
-        swapped_files = glob.glob(swapped_pattern)
-
-        for swapped_file in swapped_files:
-            # Only process files created in the last 30 seconds
-            file_mtime = os.path.getmtime(swapped_file)
-            if current_time - file_mtime > 30:
-                continue
-
-            # Build new filename: replace -swapped with -facename
-            new_filename = swapped_file.replace('-swapped.png', f'-{short_name}.png')
-
-            try:
-                os.rename(swapped_file, new_filename)
-                print(f"[Random Faces] Renamed: {os.path.basename(swapped_file)} -> {os.path.basename(new_filename)}")
-            except Exception as e:
-                print(f"[Random Faces] Error renaming file: {e}")
+        """Add selected face info to generation parameters"""
+        if enabled and self.last_selected_face:
+            if hasattr(processed, 'infotexts') and processed.infotexts:
+                for i in range(len(processed.infotexts)):
+                    processed.infotexts[i] += f", Random Face: {self.last_selected_face}"
