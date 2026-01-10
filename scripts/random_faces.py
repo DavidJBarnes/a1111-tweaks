@@ -151,13 +151,19 @@ _random_faces_instance = None
 def on_image_saved(params):
     """Called after each image is saved - rename -swapped files"""
     global _random_faces_instance
-    if _random_faces_instance is None:
-        return
-    if not _random_faces_instance.last_selected_face:
-        return
 
     filepath = params.filename
+    print(f"[Random Faces] on_image_saved called: {filepath}")
+
+    if _random_faces_instance is None:
+        print("[Random Faces] No instance, skipping")
+        return
+    if not _random_faces_instance.last_selected_face:
+        print("[Random Faces] No last_selected_face, skipping")
+        return
+
     if not filepath.endswith('-swapped.png'):
+        print(f"[Random Faces] Not a swapped file, skipping")
         return
 
     face_name = _random_faces_instance.get_face_name(_random_faces_instance.last_selected_face)
