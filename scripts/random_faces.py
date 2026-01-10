@@ -124,26 +124,17 @@ class RandomFacesScript(scripts.Script):
         # Store for later retrieval
         self.last_selected_face = selected_face
 
-        # DEBUG: Print all script args that contain .safetensors to find FaceSwapLab's index
-        print(f"[Random Faces DEBUG] ========== LOOKING FOR FACESWAPLAB INDEX ==========")
-        print(f"[Random Faces DEBUG] Total script_args: {len(p.script_args) if hasattr(p, 'script_args') else 0}")
-        if hasattr(p, 'script_args'):
-            for i, arg in enumerate(p.script_args):
-                # Only print args that look like face checkpoints
-                if isinstance(arg, str) and '.safetensors' in arg:
-                    print(f"[Random Faces DEBUG] script_args[{i}]: {arg}")
-        print(f"[Random Faces DEBUG] ===================================================")
-        print(f"[Random Faces] Want to set face to: {selected_face}")
+        # FaceSwapLab stores the face checkpoint at index 31 (after ControlNet installation)
+        # Previously was index 28 before ControlNet added its arguments
+        FACESWAPLAB_FACE_INDEX = 31
 
-        # Try to set the face checkpoint at index 28 (old position)
-        # After ControlNet, this index has likely changed
-        if hasattr(p, 'script_args') and len(p.script_args) > 28:
+        if hasattr(p, 'script_args') and len(p.script_args) > FACESWAPLAB_FACE_INDEX:
             args_list = list(p.script_args)
-            args_list[28] = selected_face
+            args_list[FACESWAPLAB_FACE_INDEX] = selected_face
             p.script_args = tuple(args_list)
-            print(f"[Random Faces] Set script_args[28] to: {selected_face}")
+            print(f"[Random Faces] Set face checkpoint to: {selected_face}")
         else:
-            print(f"[Random Faces] Warning: Could not set face checkpoint")
+            print(f"[Random Faces] Warning: Could not set face checkpoint (script_args too short)")
 
     def process(self, p, enabled):
         # Moved logic to before_process
