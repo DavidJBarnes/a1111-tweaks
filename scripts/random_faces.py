@@ -101,6 +101,7 @@ class RandomFacesScript(scripts.Script):
         return [enabled]
 
     def before_process(self, p, enabled):
+        global _last_selected_face
         if not enabled:
             return
         if not self.face_pool:
@@ -113,8 +114,9 @@ class RandomFacesScript(scripts.Script):
             return
         # Select a random face from the pool
         selected_face = random.choice(valid_faces)
-        # Store for later retrieval
+        # Store for later retrieval (both instance and global)
         self.last_selected_face = selected_face
+        _last_selected_face = selected_face
         # FaceSwapLab stores the face checkpoint at index 31 (after ControlNet installation)
         # Previously was index 28 before ControlNet added its arguments
         FACESWAPLAB_FACE_INDEX = 31
@@ -144,21 +146,18 @@ class RandomFacesScript(scripts.Script):
                     processed.infotexts[i] += f", Random Face: {self.last_selected_face}"
 
 
-# Global instance to track last selected face
-_random_faces_instance = None
+# Global to track last selected face for the callback
+_last_selected_face = None
 
 
 def on_image_saved(params):
     """Called after each image is saved - rename -swapped files"""
-    global _random_faces_instance
+    global _last_selected_face
 
     filepath = params.filename
     print(f"[Random Faces] on_image_saved called: {filepath}")
 
-    if _random_faces_instance is None:
-        print("[Random Faces] No instance, skipping")
-        return
-    if not _random_faces_instance.last_selected_face:
+    if not _last_selected_face:
         print("[Random Faces] No last_selected_face, skipping")
         return
 
@@ -166,9 +165,8 @@ def on_image_saved(params):
         print(f"[Random Faces] Not a swapped file, skipping")
         return
 
-    face_name = _random_faces_instance.get_face_name(_random_faces_instance.last_selected_face)
-    if not face_name:
-        return
+    # Remove .safetensors extension and lowercase
+    face_name = _last_selected_face.replace('.safetensors', '').lower()
 
     new_filepath = filepath.replace('-swapped.png', f'-{face_name}.png')
     try:
@@ -180,15 +178,3 @@ def on_image_saved(params):
 
 # Register the callback
 script_callbacks.on_image_saved(on_image_saved)
-
-# Hook to capture instance
-_original_init = RandomFacesScript.__init__
-
-
-def _new_init(self, *args, **kwargs):
-    global _random_faces_instance
-    _original_init(self, *args, **kwargs)
-    _random_faces_instance = self
-
-
-RandomFacesScript.__init__ = _new_init
