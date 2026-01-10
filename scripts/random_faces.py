@@ -123,19 +123,23 @@ class RandomFacesScript(scripts.Script):
     def rename_swapped_files(self, p):
         """Find and rename -swapped files to include face name"""
         if not self.last_selected_face:
+            print("[Random Faces] No last_selected_face, skipping rename")
             return
         face_name = self.get_face_name(self.last_selected_face)
         if not face_name:
+            print("[Random Faces] Could not get face_name, skipping rename")
             return
         # Get the output directory
         outdir = p.outpath_samples if hasattr(p, 'outpath_samples') else None
         if not outdir:
             print("[Random Faces] Could not determine output directory")
             return
+        print(f"[Random Faces] Looking for swapped files in: {outdir}")
         # Look for recently created -swapped files (within last 30 seconds)
         current_time = time.time()
         swapped_pattern = os.path.join(outdir, "*-swapped.png")
         swapped_files = glob.glob(swapped_pattern)
+        print(f"[Random Faces] Found {len(swapped_files)} files matching *-swapped.png")
         for swapped_file in swapped_files:
             # Only process files created in the last 30 seconds
             file_mtime = os.path.getmtime(swapped_file)
