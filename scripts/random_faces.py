@@ -3,7 +3,7 @@ import json
 import os
 import random as stdlib_random
 
-from modules import scripts
+from modules import scripts, shared
 from modules.processing import StableDiffusionProcessing
 
 
@@ -40,16 +40,16 @@ class RandomFacesScript(scripts.Script):
             json.dump({'face_pool': self.face_pool}, f)
 
     def refresh_available_faces(self):
-        faces_dir = os.path.join(os.path.dirname(scripts.basedir()), "models", "faceswaplab", "faces")
+        # Use A1111's models path directly
+        faces_dir = os.path.join(shared.models_path, "faceswaplab", "faces")
+        print(f"[Random Faces] Looking for faces in: {faces_dir}")
+
         if os.path.exists(faces_dir):
-            self.available_faces = ["None"] + [f for f in os.listdir(faces_dir) if f.endswith('.safetensors')]
+            self.available_faces = ["None"] + sorted([f for f in os.listdir(faces_dir) if f.endswith('.safetensors')])
+            print(f"[Random Faces] Found {len(self.available_faces) - 1} faces")
         else:
-            # Try alternate path
-            alt_faces_dir = os.path.expanduser("~/stable-diffusion-webui/models/faceswaplab/faces")
-            if os.path.exists(alt_faces_dir):
-                self.available_faces = ["None"] + [f for f in os.listdir(alt_faces_dir) if f.endswith('.safetensors')]
-            else:
-                self.available_faces = ["None"]
+            print(f"[Random Faces] Directory not found: {faces_dir}")
+            self.available_faces = ["None"]
 
     def ui(self, is_img2img):
         with gr.Accordion("a1111 tweaks - Random Faces", open=False):
