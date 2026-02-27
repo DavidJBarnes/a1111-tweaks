@@ -5,15 +5,27 @@ import uuid
 
 import gradio as gr
 import requests
-from modules import scripts
+from modules import scripts, script_callbacks
+
+# Module-level storage so the on_image_saved callback can write to it
+_last_image = None
+_last_filename = None
+
+
+def _on_image_saved(params):
+    """Called after ALL postprocessing (including FaceSwapLab) and saving."""
+    global _last_image, _last_filename
+    _last_image = params.image
+    _last_filename = os.path.basename(params.filename)
+
+
+script_callbacks.on_image_saved(_on_image_saved)
 
 
 class UploadToWanlyScript(scripts.Script):
     def __init__(self):
         self.config_file = os.path.join(scripts.basedir(), "upload_to_wanly_config.json")
         self.config = self.load_config()
-        self.last_image = None
-        self.last_filename = None
 
     def title(self):
         return "Upload to Wanly"
@@ -68,13 +80,13 @@ class UploadToWanlyScript(scripts.Script):
                         return "Error: API URL not set."
                     if not secret:
                         return "Error: API Key not set."
-                    if self.last_image is None:
+                    if _last_image is None:
                         return "Error: No image available. Generate an image first."
                     try:
                         buf = io.BytesIO()
-                        self.last_image.save(buf, format="PNG")
+                        _last_image.save(buf, format="PNG")
                         buf.seek(0)
-                        filename = self.last_filename or f"{uuid.uuid4().hex}.png"
+                        filename = _last_filename or f"{uuid.uuid4().hex}.png"
                         resp = requests.post(
                             f"{api}/images/upload",
                             params={"filename": filename},
@@ -102,13 +114,3 @@ class UploadToWanlyScript(scripts.Script):
                 )
 
         return []
-
-    def postprocess(self, p, processed):
-        if processed.images:
-            self.last_image = processed.images[0]
-            # Derive filename from seed
-            try:
-                seed = processed.all_seeds[0]
-                self.last_filename = f"{seed}.png"
-            except (IndexError, AttributeError):
-                self.last_filename = f"{uuid.uuid4().hex}.png"
