@@ -142,8 +142,11 @@ class GalleryScript(scripts.Script):
                 next_btn.click(fn=go_next, inputs=[current_page], outputs=[gallery, page_info, current_page])
                 refresh_btn.click(fn=do_refresh, inputs=[], outputs=[gallery, page_info, current_page])
 
+                def on_select(evt: gr.SelectData):
+                    return evt.index
+
                 gallery.select(
-                    fn=lambda evt: evt.index,
+                    fn=on_select,
                     inputs=[],
                     outputs=[selected_index],
                 )
