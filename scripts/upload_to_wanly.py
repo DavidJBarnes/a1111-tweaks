@@ -22,6 +22,53 @@ def _on_image_saved(params):
 script_callbacks.on_image_saved(_on_image_saved)
 
 
+def load_wanly_config():
+    """Load wanly upload config from JSON."""
+    config_file = os.path.join(scripts.basedir(), "upload_to_wanly_config.json")
+    if os.path.exists(config_file):
+        try:
+            with open(config_file, "r") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {"api_url": "", "api_key": ""}
+
+
+def upload_image_to_wanly(image, filename, api_url=None, api_key=None):
+    """Upload a PIL Image to the wanly API."""
+    if api_url is None or api_key is None:
+        config = load_wanly_config()
+        if api_url is None:
+            api_url = config.get("api_url", "")
+        if api_key is None:
+            api_key = config.get("api_key", "")
+
+    api_url = api_url.rstrip("/")
+    if not api_url:
+        return False, "Error: API URL not set."
+    if not api_key:
+        return False, "Error: API Key not set."
+
+    try:
+        buf = io.BytesIO()
+        image.save(buf, format="PNG")
+        buf.seek(0)
+        resp = requests.post(
+            f"{api_url}/images/upload",
+            params={"filename": filename},
+            headers={"X-API-Key": api_key},
+            files={"file": (filename, buf, "image/png")},
+            timeout=60,
+        )
+        if resp.status_code == 200:
+            path = resp.json().get("path", "")
+            return True, f"Uploaded: {path}"
+        else:
+            return False, f"Error {resp.status_code}: {resp.text}"
+    except Exception as e:
+        return False, f"Error: {e}"
+
+
 class UploadToWanlyScript(scripts.Script):
     def __init__(self):
         self.config_file = os.path.join(scripts.basedir(), "upload_to_wanly_config.json")
@@ -34,13 +81,7 @@ class UploadToWanlyScript(scripts.Script):
         return scripts.AlwaysVisible
 
     def load_config(self):
-        if os.path.exists(self.config_file):
-            try:
-                with open(self.config_file, "r") as f:
-                    return json.load(f)
-            except Exception:
-                pass
-        return {"api_url": "", "api_key": ""}
+        return load_wanly_config()
 
     def save_config_to_file(self):
         try:
@@ -73,34 +114,15 @@ class UploadToWanlyScript(scripts.Script):
                     return "Settings saved."
 
                 def upload_last(url, key):
-                    # Use form values directly so unsaved edits still work
-                    api = url.rstrip("/") if url else self.config.get("api_url", "")
-                    secret = key if key else self.config.get("api_key", "")
-                    if not api:
-                        return "Error: API URL not set."
-                    if not secret:
-                        return "Error: API Key not set."
                     if _last_image is None:
                         return "Error: No image available. Generate an image first."
-                    try:
-                        buf = io.BytesIO()
-                        _last_image.save(buf, format="PNG")
-                        buf.seek(0)
-                        filename = _last_filename or f"{uuid.uuid4().hex}.png"
-                        resp = requests.post(
-                            f"{api}/images/upload",
-                            params={"filename": filename},
-                            headers={"X-API-Key": secret},
-                            files={"file": (filename, buf, "image/png")},
-                            timeout=60,
-                        )
-                        if resp.status_code == 200:
-                            path = resp.json().get("path", "")
-                            return f"Uploaded: {path}"
-                        else:
-                            return f"Error {resp.status_code}: {resp.text}"
-                    except Exception as e:
-                        return f"Error: {e}"
+                    success, message = upload_image_to_wanly(
+                        _last_image,
+                        _last_filename or f"{uuid.uuid4().hex}.png",
+                        api_url=url,
+                        api_key=key,
+                    )
+                    return message
 
                 save_btn.click(
                     fn=save_settings,
