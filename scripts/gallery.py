@@ -102,8 +102,6 @@ class GalleryScript(scripts.Script):
                     rows=1,
                     height=220,
                     object_fit="contain",
-                    allow_preview=True,
-                    preview=True,
                 )
                 page_info = gr.Textbox(
                     label="Page Info",
