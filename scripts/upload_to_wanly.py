@@ -1,78 +1,54 @@
-import io
-import json
 import os
 import uuid
 
 import gradio as gr
-import requests
 from modules import scripts, script_callbacks
+
+from scripts.wanly_upload import (
+    API_URL,
+    auto_upload_status,
+    is_grid_image,
+    load_wanly_config,
+    queue_auto_upload,
+    reset_auto_upload,
+    save_wanly_config,
+    upload_image_to_wanly,
+)
 
 # Module-level storage so the on_image_saved callback can write to it
 _last_image = None
 _last_filename = None
 
+# Set from process() so the callback knows whether the generation that produced
+# this image had auto-upload enabled. Comparing against the active `p` keeps
+# unrelated saves (Extras tab, PNG Info) from being picked up by a stale flag.
+_auto_enabled = False
+_active_p = None
+
 
 def _on_image_saved(params):
     """Called after ALL postprocessing (including FaceSwapLab) and saving."""
     global _last_image, _last_filename
-    _last_image = params.image
-    _last_filename = os.path.basename(params.filename)
+    try:
+        if is_grid_image(params):
+            return
+
+        _last_image = params.image
+        _last_filename = os.path.basename(params.filename)
+
+        p = getattr(params, "p", None)
+        if _auto_enabled and p is not None and p is _active_p:
+            queue_auto_upload(params.filename)
+    except Exception as e:
+        print(f"[Upload to Wanly] Error handling saved image: {e}")
 
 
 script_callbacks.on_image_saved(_on_image_saved)
 
 
-def load_wanly_config():
-    """Load wanly upload config from JSON."""
-    config_file = os.path.join(scripts.basedir(), "upload_to_wanly_config.json")
-    if os.path.exists(config_file):
-        try:
-            with open(config_file, "r") as f:
-                return json.load(f)
-        except Exception:
-            pass
-    return {"api_url": "", "api_key": ""}
-
-
-def upload_image_to_wanly(image, filename, api_url=None, api_key=None):
-    """Upload a PIL Image to the wanly API."""
-    if api_url is None or api_key is None:
-        config = load_wanly_config()
-        if api_url is None:
-            api_url = config.get("api_url", "")
-        if api_key is None:
-            api_key = config.get("api_key", "")
-
-    api_url = api_url.rstrip("/")
-    if not api_url:
-        return False, "Error: API URL not set."
-    if not api_key:
-        return False, "Error: API Key not set."
-
-    try:
-        buf = io.BytesIO()
-        image.save(buf, format="PNG")
-        buf.seek(0)
-        resp = requests.post(
-            f"{api_url}/images/upload",
-            params={"filename": filename},
-            headers={"X-API-Key": api_key},
-            files={"file": (filename, buf, "image/png")},
-            timeout=60,
-        )
-        if resp.status_code == 200:
-            path = resp.json().get("path", "")
-            return True, f"Uploaded: {path}"
-        else:
-            return False, f"Error {resp.status_code}: {resp.text}"
-    except Exception as e:
-        return False, f"Error: {e}"
-
-
 class UploadToWanlyScript(scripts.Script):
     def __init__(self):
-        self.config_file = os.path.join(scripts.basedir(), "upload_to_wanly_config.json")
-        self.config = self.load_config()
+        self.config = load_wanly_config()
 
     def title(self):
         return "Upload to Wanly"
@@ -80,24 +56,10 @@ class UploadToWanlyScript(scripts.Script):
     def show(self, is_img2img):
         return scripts.AlwaysVisible
 
-    def load_config(self):
-        return load_wanly_config()
-
-    def save_config_to_file(self):
-        try:
-            with open(self.config_file, "w") as f:
-                json.dump(self.config, f, indent=2)
-        except Exception as e:
-            print(f"[Upload to Wanly] Error saving config: {e}")
-
     def ui(self, is_img2img):
         with gr.Group():
             with gr.Accordion("a1111 tweaks - Upload to Wanly", open=False):
-                api_url = gr.Textbox(
-                    label="API URL",
-                    value=self.config.get("api_url", ""),
-                    placeholder="http://api.wanly22.com:8001",
-                )
+                gr.Markdown(f"Uploading to `{API_URL}`")
                 api_key = gr.Textbox(
                     label="API Key",
                     value=self.config.get("api_key", ""),
@@ -107,32 +69,79 @@ class UploadToWanlyScript(scripts.Script):
                 upload_btn = gr.Button("Upload Last Image", variant="primary")
                 status_box = gr.Textbox(label="Status", interactive=False, lines=2)
 
-                def save_settings(url, key):
-                    self.config["api_url"] = url.rstrip("/")
-                    self.config["api_key"] = key
-                    self.save_config_to_file()
-                    return "Settings saved."
+                auto_upload = gr.Checkbox(
+                    label="Auto-upload every completed image",
+                    value=bool(self.config.get("auto_upload", False)),
+                )
+                gr.Markdown(
+                    "Uploads run in the background using the **saved** API key - "
+                    "click Save Settings after changing it. Pairs with A1111's "
+                    "generate forever (right-click Generate)."
+                )
+                auto_status = gr.Textbox(
+                    label="Auto-upload Status",
+                    value=auto_upload_status(),
+                    interactive=False,
+                    lines=3,
+                )
+                refresh_btn = gr.Button("Refresh Auto-upload Status", variant="secondary")
 
-                def upload_last(url, key):
+                def save_settings(key, auto):
+                    config = load_wanly_config()
+                    config["api_key"] = key
+                    config["auto_upload"] = bool(auto)
+                    self.config = config
+                    reset_auto_upload()
+                    if not save_wanly_config(config):
+                        return "Error saving settings - see console.", auto_upload_status()
+                    return "Settings saved.", auto_upload_status()
+
+                def upload_last(key):
                     if _last_image is None:
                         return "Error: No image available. Generate an image first."
                     success, message = upload_image_to_wanly(
                         _last_image,
                         _last_filename or f"{uuid.uuid4().hex}.png",
-                        api_url=url,
                         api_key=key,
                     )
                     return message
 
+                def on_auto_toggle(auto):
+                    # Re-enabling clears a paused circuit breaker so the user can
+                    # fix settings and carry on without a restart.
+                    if auto:
+                        reset_auto_upload()
+                    return auto_upload_status()
+
                 save_btn.click(
                     fn=save_settings,
-                    inputs=[api_url, api_key],
-                    outputs=[status_box],
+                    inputs=[api_key, auto_upload],
+                    outputs=[status_box, auto_status],
                 )
                 upload_btn.click(
                     fn=upload_last,
-                    inputs=[api_url, api_key],
+                    inputs=[api_key],
                     outputs=[status_box],
                 )
+                auto_upload.change(
+                    fn=on_auto_toggle,
+                    inputs=[auto_upload],
+                    outputs=[auto_status],
+                )
+                refresh_btn.click(
+                    fn=auto_upload_status,
+                    inputs=[],
+                    outputs=[auto_status],
+                )
 
-        return []
+        return [auto_upload]
+
+    def process(self, p, auto_upload=False):
+        global _auto_enabled, _active_p
+        _auto_enabled = bool(auto_upload)
+        _active_p = p
+
+    def postprocess(self, p, processed, auto_upload=False):
+        global _active_p
+        if _active_p is p:
+            _active_p = None

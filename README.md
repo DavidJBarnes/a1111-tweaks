@@ -125,6 +125,38 @@ You can modify or remove these as needed.
 - Dimensions are applied during the `process()` phase before generation begins
 - The extension is compatible with all samplers and other extensions
 
+## Upload to Wanly
+
+The `upload_to_wanly.py` script adds an **"a1111 tweaks - Upload to Wanly"** accordion for pushing generated images to a wanly API endpoint.
+
+### Setup
+
+1. Enter your **API Key**
+2. Click **Save Settings** — settings are written to `upload_to_wanly_config.json`
+
+The endpoint is hardcoded to `http://api.wanly22.com:8001` (`API_URL` in `scripts/wanly_upload.py`), so the key is the only thing to fill in.
+
+### Manual upload
+
+Click **Upload Last Image** to send the most recent generation. Grid images are ignored, so this always picks the last real image rather than the contact sheet.
+
+### Auto-upload
+
+Tick **"Auto-upload every completed image"** and every image that finishes generating is uploaded automatically. This is what pairs with A1111's **generate forever** (right-click the Generate button): leave it running and each render is uploaded as it lands.
+
+Notes:
+
+- Auto-upload uses the **saved** API key, so click Save Settings before enabling it.
+- Uploads happen on a background thread and never block or slow down generation.
+- Grid images are skipped; each image in a batch is uploaded individually.
+- If five uploads fail in a row (e.g. the API is down), auto-upload pauses itself instead of retrying for the rest of a long run. Fix the settings and click Save Settings, or untick and re-tick the checkbox, to resume.
+- **Auto-upload Status** shows counts and the last result; click **Refresh Auto-upload Status** to update it.
+- The checkbox state is saved with your settings, so it can be on by default at startup.
+
+## Gallery
+
+The `gallery.py` script adds an **"a1111 tweaks - Gallery"** accordion that pages through recent images on disk and uploads any selected one to wanly.
+
 ## Contributing
 
 Feel free to submit issues, feature requests, or pull requests!
