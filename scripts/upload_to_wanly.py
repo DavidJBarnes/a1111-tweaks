@@ -6,6 +6,7 @@ from modules import scripts, script_callbacks
 
 from scripts.wanly_upload import (
     API_URL,
+    LOG_PREFIX,
     auto_upload_status,
     is_grid_image,
     load_wanly_config,
@@ -25,12 +26,18 @@ _last_filename = None
 _auto_enabled = False
 _active_p = None
 
+# So the arm/disarm line is logged on change only, not once per generation.
+_last_logged_auto = None
+
 
 def _on_image_saved(params):
     """Called after ALL postprocessing (including FaceSwapLab) and saving."""
     global _last_image, _last_filename
     try:
         if is_grid_image(params):
+            if _auto_enabled:
+                filename = getattr(params, "filename", "") or ""
+                print(f"{LOG_PREFIX} Skipped grid {os.path.basename(filename)}")
             return
 
         _last_image = params.image
@@ -40,10 +47,11 @@ def _on_image_saved(params):
         if _auto_enabled and p is not None and p is _active_p:
             queue_auto_upload(params.filename)
     except Exception as e:
-        print(f"[Upload to Wanly] Error handling saved image: {e}")
+        print(f"{LOG_PREFIX} Error handling saved image: {e}")
 
 
 script_callbacks.on_image_saved(_on_image_saved)
+print(f"{LOG_PREFIX} Loaded, uploads target {API_URL}")
 
 
 class UploadToWanlyScript(scripts.Script):
@@ -137,9 +145,13 @@ class UploadToWanlyScript(scripts.Script):
         return [auto_upload]
 
     def process(self, p, auto_upload=False):
-        global _auto_enabled, _active_p
+        global _auto_enabled, _active_p, _last_logged_auto
         _auto_enabled = bool(auto_upload)
         _active_p = p
+        if _auto_enabled != _last_logged_auto:
+            state = "ARMED" if _auto_enabled else "off"
+            print(f"{LOG_PREFIX} Auto-upload {state}")
+            _last_logged_auto = _auto_enabled
 
     def postprocess(self, p, processed, auto_upload=False):
         global _active_p
