@@ -40,7 +40,8 @@ An Automatic1111 (A1111) Stable Diffusion WebUI extension with 5 scripts + 1 sha
 ## Conventions
 
 - UI accordions use the prefix `a1111 tweaks -` in their titles.
-- Console logging uses `[Script Name]` prefix format.
+- Console logging uses `[Script Name]` prefix format. The wanly scripts share the single `LOG_PREFIX` (`[Wanly Upload]`) exported by `wanly_upload.py` so one grep catches both files.
+- Log the success path, not just failures — a silent console must never be ambiguous between "working" and "never fired".
 - Gradio closure functions inside `ui()` handle all button callbacks.
 - New scripts should follow the same pattern: `scripts.Script` subclass, `AlwaysVisible`, JSON config via `scripts.basedir()`.
 

@@ -190,6 +190,10 @@ def queue_auto_upload(path):
         print(f"{LOG_PREFIX} Queue full, skipped {os.path.basename(path)}")
         return False
 
+    print(
+        f"{LOG_PREFIX} Queued {os.path.basename(path)} "
+        f"({_upload_queue.qsize()} pending)"
+    )
     return True
 
 
@@ -202,6 +206,7 @@ def _start_worker():
             target=_worker_loop, name="wanly-auto-upload", daemon=True
         )
         _worker_thread.start()
+        print(f"{LOG_PREFIX} Upload worker started, target {API_URL}")
 
 
 def _worker_loop():
@@ -219,6 +224,10 @@ def _worker_loop():
 
             if success:
                 _consecutive_failures = 0
+                print(
+                    f"{LOG_PREFIX} {os.path.basename(path)}: {message} "
+                    f"(total {_stats['uploaded']})"
+                )
             else:
                 _consecutive_failures += 1
                 print(f"{LOG_PREFIX} {os.path.basename(path)}: {message}")
