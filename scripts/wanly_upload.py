@@ -169,10 +169,12 @@ def queue_auto_upload(path):
 
     with _stats_lock:
         if _stats["paused_reason"]:
+            print(f"{LOG_PREFIX} Not queued, auto-upload is paused: {path}")
             return False
 
     with _seen_lock:
         if path in _seen:
+            print(f"{LOG_PREFIX} Not queued, already uploaded: {path}")
             return False
         _seen[path] = True
         while len(_seen) > SEEN_HISTORY:

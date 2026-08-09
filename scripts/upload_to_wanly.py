@@ -43,8 +43,16 @@ def _on_image_saved(params):
         _last_image = params.image
         _last_filename = os.path.basename(params.filename)
 
+        if not _auto_enabled:
+            return
+
         p = getattr(params, "p", None)
-        if _auto_enabled and p is not None and p is _active_p:
+        if p is None:
+            print(f"{LOG_PREFIX} Not queued, no p on {_last_filename}")
+        elif p is not _active_p:
+            # Saves from the Extras tab and friends carry a different p.
+            print(f"{LOG_PREFIX} Not queued, p mismatch on {_last_filename}")
+        else:
             queue_auto_upload(params.filename)
     except Exception as e:
         print(f"{LOG_PREFIX} Error handling saved image: {e}")
@@ -153,7 +161,7 @@ class UploadToWanlyScript(scripts.Script):
             print(f"{LOG_PREFIX} Auto-upload {state}")
             _last_logged_auto = _auto_enabled
 
-    def postprocess(self, p, processed, auto_upload=False):
-        global _active_p
-        if _active_p is p:
-            _active_p = None
+    # No postprocess() cleanup of _active_p on purpose: FaceSwapLab adds its
+    # swapped image late, so the save can land after this script's postprocess
+    # and the identity check would reject the very image we want. Leaving the
+    # last p in place still rejects unrelated saves, which carry a different p.
