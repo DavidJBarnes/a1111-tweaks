@@ -1,58 +1,14 @@
-import io
-import json
 import os
 
-import requests
 import gradio as gr
 from modules import scripts
 from PIL import Image
 
+from scripts.wanly_upload import upload_image_to_wanly
+
 IMAGES_PER_PAGE = 10
 BASE_DIR = os.path.expanduser("~/StabilityMatrix-linux-x64/Data/Images/Text2Img")
 IMAGE_EXTENSIONS = ("*.png", "*.jpg", "*.jpeg", "*.webp")
-
-
-def load_wanly_config():
-    """Load wanly upload config from JSON."""
-    config_file = os.path.join(scripts.basedir(), "upload_to_wanly_config.json")
-    if os.path.exists(config_file):
-        try:
-            with open(config_file, "r") as f:
-                return json.load(f)
-        except Exception:
-            pass
-    return {"api_url": "", "api_key": ""}
-
-
-def upload_image_to_wanly(image, filename):
-    """Upload a PIL Image to the wanly API."""
-    config = load_wanly_config()
-    api_url = config.get("api_url", "").rstrip("/")
-    api_key = config.get("api_key", "")
-
-    if not api_url:
-        return "Error: API URL not set."
-    if not api_key:
-        return "Error: API Key not set."
-
-    try:
-        buf = io.BytesIO()
-        image.save(buf, format="PNG")
-        buf.seek(0)
-        resp = requests.post(
-            f"{api_url}/images/upload",
-            params={"filename": filename},
-            headers={"X-API-Key": api_key},
-            files={"file": (filename, buf, "image/png")},
-            timeout=60,
-        )
-        if resp.status_code == 200:
-            path = resp.json().get("path", "")
-            return f"Uploaded: {path}"
-        else:
-            return f"Error {resp.status_code}: {resp.text}"
-    except Exception as e:
-        return f"Error: {e}"
 
 
 def scan_all_images():
@@ -159,9 +115,12 @@ class GalleryScript(scripts.Script):
                         return "Image no longer available."
                     filepath = all_images[real_idx]
                     try:
-                        img = Image.open(filepath)
-                        filename = os.path.basename(filepath)
-                        return upload_image_to_wanly(img, filename)
+                        with Image.open(filepath) as img:
+                            img.load()
+                            success, message = upload_image_to_wanly(
+                                img, os.path.basename(filepath)
+                            )
+                        return message
                     except Exception as e:
                         return f"Error: {e}"
 
