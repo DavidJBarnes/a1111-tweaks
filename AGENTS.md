@@ -2,7 +2,7 @@
 
 ## What This Is
 
-An Automatic1111 (A1111) Stable Diffusion WebUI extension with 5 scripts + 1 shared module in `scripts/`. No build system, no tests, no CI. Scripts are loaded directly by A1111 at startup.
+An Automatic1111 (A1111) Stable Diffusion WebUI extension with 6 scripts + 1 shared module in `scripts/`, plus one browser-side file in `javascript/`. No build system, no tests, no CI. Both directories are loaded directly by A1111 at startup.
 
 ## Scripts
 
@@ -14,6 +14,8 @@ An Automatic1111 (A1111) Stable Diffusion WebUI extension with 5 scripts + 1 sha
 | `upload_to_wanly.py` | Uploads the last generated image to a custom API (wanly22.com) via button click, plus an "auto-upload every completed image" checkbox |
 | `gallery.py` | Paginated browser of recent images from `~/StabilityMatrix-linux-x64/Data/Images/Text2Img/`, with per-image upload to wanly |
 | `wanly_upload.py` | **Shared helper** — the hardcoded `API_URL`, config load/save, `upload_image_to_wanly()`, `is_grid_image()`, and the background auto-upload worker. Imported by `upload_to_wanly.py` and `gallery.py`. |
+| `generate_forever_delay.py` | Registers the `tweaks_generate_forever_delay` Settings option (seconds, default 2). No `Script` subclass — just an `on_ui_settings` callback; the behaviour lives in the JS below. |
+| `javascript/generate_forever_delay.js` | Replaces A1111's global `generateOnRepeat` with a version that waits that many seconds after each render before re-clicking Generate. |
 
 ## Architecture Notes
 
@@ -29,6 +31,10 @@ An Automatic1111 (A1111) Stable Diffusion WebUI extension with 5 scripts + 1 sha
 - **`random_faces.py` hardcodes index 31** for FaceSwapLab's checkpoint in `p.script_args`. This is fragile and may break with A1111 or FaceSwapLab updates.
 - **`upload_to_wanly.py` uses `script_callbacks.on_image_saved`** at module level to capture the last generated image. The callback fires after all postprocessing.
 - **A1111's "generate forever" is client-side only** (`javascript/contextMenus.js` re-clicks the Generate button on a `setInterval`). There is no Python-visible flag, so auto-upload deliberately fires on *every* completed render rather than trying to detect that mode.
+- **`generateOnRepeat` is a top-level `let` in core JS**, i.e. a lexical global, *not* a property of `window` — `window.generateOnRepeat = ...` silently does nothing. Override it with a bare-name assignment from inside a function, and read it through `try`/`catch` since touching an uninitialised lexical global throws `ReferenceError` rather than returning `undefined`.
+- **The replacement keeps its timer in `window.generateOnRepeatInterval`** so the stock "Cancel generate forever" context-menu item, which just calls `clearInterval` on it, keeps working. Do not move the handle to a private variable.
+- **Don't implement the inter-run wait as `time.sleep()` in `postprocess()`.** It would block the generation thread, so the Interrupt button stays up, the UI reads busy, and queued API jobs stall — the same problem described below for synchronous uploads.
+- **Extension `javascript/*.js` loads after core JS** (`list_scripts` walks the webui's own `javascript/` dir first, then extensions), which is what makes the override land. Anything that must survive a different load order belongs in an `onUiLoaded` callback.
 - **`on_image_saved` also fires for grids**, and grids are saved *last* — always run payloads through `is_grid_image()` before treating one as "the generated image".
 - **Auto-upload is gated on `params.p is _active_p`**, not just the checkbox. Without the identity check, a stale flag would auto-upload unrelated saves from the Extras tab or PNG Info.
 - **Never clear `_active_p` in `postprocess()`.** FaceSwapLab adds its swapped image late (watch for `Add swp image to processed` in the log), so the save can land *after* this script's `postprocess` has run — clearing there makes the identity check reject the very image auto-upload exists to send. This shipped once and produced a silent no-op: armed, generating, uploading nothing. Leaving the last `p` in place still rejects unrelated saves, because those carry a different `p`.
