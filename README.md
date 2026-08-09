@@ -153,6 +153,39 @@ Notes:
 - **Auto-upload Status** shows counts and the last result; click **Refresh Auto-upload Status** to update it.
 - The checkbox state is saved with your settings, so it can be on by default at startup.
 
+### Reading the logs
+
+Every step logs with the `[Wanly Upload]` prefix, so one filter follows the whole path:
+
+```
+journalctl -u sd.service -f | grep --line-buffered "Wanly Upload"
+```
+
+A healthy run looks like this:
+
+```
+[Wanly Upload] Loaded, uploads target http://api.wanly22.com:8001
+[Wanly Upload] Auto-upload ARMED
+[Wanly Upload] Upload worker started, target http://api.wanly22.com:8001
+[Wanly Upload] Queued 00042-1234.png (1 pending)
+[Wanly Upload] 00042-1234.png: Uploaded: /path/on/server.png (total 1)
+```
+
+`Loaded` appears at startup and confirms the extension imported. `ARMED` is logged only when the checkbox changes state, so generate forever doesn't repeat it every iteration — expect just the `Queued` and `Uploaded` pair per image after that.
+
+When an image is deliberately not uploaded, the reason is always logged:
+
+| Line | Meaning |
+|---|---|
+| `Skipped grid grid-0001.png` | Batch grid, not a real render — expected with batch count > 1 |
+| `Not queued, p mismatch on …` | The save came from a different generation than the armed one |
+| `Not queued, no p on …` | Save had no processing object attached (Extras tab, PNG Info) |
+| `Not queued, auto-upload is paused: …` | The circuit breaker tripped — see below |
+| `Not queued, already uploaded: …` | Duplicate; that path was uploaded already |
+| `Error: API Key not set.` | Key wasn't saved — enter it and click Save Settings |
+
+If nothing appears at all after ticking the box, the extension didn't load — check for a traceback above the missing `Loaded` line. Note that A1111's progress bars can cause journald to render nearby lines as `[NNN B blob data]`; pass `-a` to `journalctl` to reveal them.
+
 ## Gallery
 
 The `gallery.py` script adds an **"a1111 tweaks - Gallery"** accordion that pages through recent images on disk and uploads any selected one to wanly.
