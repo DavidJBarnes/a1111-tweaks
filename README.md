@@ -186,6 +186,16 @@ When an image is deliberately not uploaded, the reason is always logged:
 
 If nothing appears at all after ticking the box, the extension didn't load — check for a traceback above the missing `Loaded` line. Note that A1111's progress bars can cause journald to render nearby lines as `[NNN B blob data]`; pass `-a` to `journalctl` to reveal them.
 
+## Generate Forever Delay
+
+A1111's **generate forever** (right-click the Generate button) fires the next render the instant the previous one finishes. This extension adds a cooldown between iterations.
+
+Set it under **Settings → a1111 tweaks → "Generate forever: seconds to wait between runs"**. The default is **2 seconds**; `0` restores stock back-to-back behaviour.
+
+The delay is re-read on every poll, so changing it takes effect on the *next* gap — no need to stop and restart generate forever, and no UI reload. "Cancel generate forever" works exactly as before.
+
+Nothing blocks the generation thread: the wait happens in the browser (`javascript/generate_forever_delay.js` replaces A1111's `generateOnRepeat`), so queued API jobs and manual Generate clicks are unaffected. The console logs `[Generate Forever Delay]` at startup and each time generate forever is started.
+
 ## Gallery
 
 The `gallery.py` script adds an **"a1111 tweaks - Gallery"** accordion that pages through recent images on disk and uploads any selected one to wanly.
