@@ -178,7 +178,7 @@ When an image is deliberately not uploaded, the reason is always logged:
 | Line | Meaning |
 |---|---|
 | `Skipped grid grid-0001.png` | Batch grid, not a real render — expected with batch count > 1 |
-| `Not queued, p mismatch on …` | The save came from a different generation than the armed one |
+| `Not queued, p not armed on …` | The save came from something other than an armed generation (e.g. Extras tab) |
 | `Not queued, no p on …` | Save had no processing object attached (Extras tab, PNG Info) |
 | `Not queued, auto-upload is paused: …` | The circuit breaker tripped — see below |
 | `Not queued, already uploaded: …` | Duplicate; that path was uploaded already |

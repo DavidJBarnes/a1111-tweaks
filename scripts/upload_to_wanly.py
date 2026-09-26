@@ -20,11 +20,17 @@ from scripts.wanly_upload import (
 _last_image = None
 _last_filename = None
 
-# Set from process() so the callback knows whether the generation that produced
-# this image had auto-upload enabled. Comparing against the active `p` keeps
-# unrelated saves (Extras tab, PNG Info) from being picked up by a stale flag.
+# Set from process(); only decides whether rejections are worth logging. The
+# actual gate is the marker below, carried on the `p` itself.
 _auto_enabled = False
-_active_p = None
+
+# process() tags the armed `p` with this attribute. A marker survives the
+# shallow `copy(p)` that ADetailer feeds back through every script's process()
+# after its inpaint pass, which an identity check against a stored `p` did not:
+# the copy replaced the stored `p` and the late FaceSwapLab save, which still
+# carries the original, got rejected. Saves from the Extras tab or PNG Info
+# carry no `p` or an unmarked one, so they are still left alone.
+_ARMED_ATTR = "_wanly_auto_upload"
 
 # So the arm/disarm line is logged on change only, not once per generation.
 _last_logged_auto = None
@@ -49,9 +55,9 @@ def _on_image_saved(params):
         p = getattr(params, "p", None)
         if p is None:
             print(f"{LOG_PREFIX} Not queued, no p on {_last_filename}")
-        elif p is not _active_p:
-            # Saves from the Extras tab and friends carry a different p.
-            print(f"{LOG_PREFIX} Not queued, p mismatch on {_last_filename}")
+        elif not getattr(p, _ARMED_ATTR, False):
+            # Saves from the Extras tab and friends carry an unarmed p.
+            print(f"{LOG_PREFIX} Not queued, p not armed on {_last_filename}")
         else:
             queue_auto_upload(params.filename)
     except Exception as e:
@@ -153,15 +159,14 @@ class UploadToWanlyScript(scripts.Script):
         return [auto_upload]
 
     def process(self, p, auto_upload=False):
-        global _auto_enabled, _active_p, _last_logged_auto
+        global _auto_enabled, _last_logged_auto
         _auto_enabled = bool(auto_upload)
-        _active_p = p
+        setattr(p, _ARMED_ATTR, _auto_enabled)
         if _auto_enabled != _last_logged_auto:
             state = "ARMED" if _auto_enabled else "off"
             print(f"{LOG_PREFIX} Auto-upload {state}")
             _last_logged_auto = _auto_enabled
 
-    # No postprocess() cleanup of _active_p on purpose: FaceSwapLab adds its
+    # No postprocess() cleanup of the marker on purpose: FaceSwapLab adds its
     # swapped image late, so the save can land after this script's postprocess
-    # and the identity check would reject the very image we want. Leaving the
-    # last p in place still rejects unrelated saves, which carry a different p.
+    # and would be rejected. The marker dies with its p, so nothing goes stale.
